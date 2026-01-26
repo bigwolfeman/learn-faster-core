@@ -1,0 +1,310 @@
+openapi: 3.1.0
+info:
+  title: LearnFast Core Engine
+  description: Hybrid Graph-RAG Learning Platform API
+  version: 0.1.0
+paths:
+  /:
+    get:
+      summary: Root
+      operationId: root__get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /ingest:
+    post:
+      summary: Upload and process a document
+      description: 'Upload a document (PDF, DOCX, HTML) for ingestion.
+
+        Converts to markdown, extracts graph structure, and creates embeddings.'
+      operationId: ingest_document_ingest_post
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Body_ingest_document_ingest_post'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /concepts/roots:
+    get:
+      summary: Get root concepts
+      description: Get all concepts with no prerequisites.
+      operationId: get_root_concepts_concepts_roots_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+  /concepts/unlocked/{user_id}:
+    get:
+      summary: Get unlocked concepts for user
+      description: Get concepts available for the user to start.
+      operationId: get_unlocked_concepts_concepts_unlocked__user_id__get
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /learning/path:
+    post:
+      summary: Generate learning path
+      description: Generate an optimized learning path to a target concept within
+        a time budget.
+      operationId: generate_learning_path_learning_path_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PathRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LearningPath'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /learning/lesson/{user_id}/{target_concept}:
+    get:
+      summary: Get formatted lesson content
+      description: 'Get full lesson content (text) for a path to target.
+
+        Convenience endpoint that resolves path + retrieves content.'
+      operationId: get_lesson_content_learning_lesson__user_id___target_concept__get
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Id
+      - name: target_concept
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Target Concept
+      - name: time_budget
+        in: query
+        required: false
+        schema:
+          type: integer
+          default: 30
+          title: Time Budget
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /progress/start:
+    post:
+      summary: Mark concept in progress
+      description: Mark a concept as started (IN_PROGRESS).
+      operationId: start_concept_progress_start_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgressUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /progress/complete:
+    post:
+      summary: Mark concept completed
+      description: Mark a concept as COMPLETED.
+      operationId: complete_concept_progress_complete_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgressUpdate'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /progress/{user_id}:
+    get:
+      summary: Get full user state
+      description: Get user's completed, in-progress, and available concepts.
+      operationId: get_user_progress_progress__user_id__get
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: User Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    Body_ingest_document_ingest_post:
+      properties:
+        file:
+          type: string
+          format: binary
+          title: File
+      type: object
+      required:
+      - file
+      title: Body_ingest_document_ingest_post
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    LearningPath:
+      properties:
+        concepts:
+          items:
+            type: string
+          type: array
+          title: Concepts
+          description: Ordered list of concepts to learn
+        estimated_time_minutes:
+          type: integer
+          title: Estimated Time Minutes
+          description: Total estimated learning time
+        target_concept:
+          type: string
+          title: Target Concept
+          description: Final concept to reach
+        pruned:
+          type: boolean
+          title: Pruned
+          description: Whether path was pruned due to time constraints
+          default: false
+      type: object
+      required:
+      - concepts
+      - estimated_time_minutes
+      - target_concept
+      title: LearningPath
+      description: Represents a resolved learning path with time estimates.
+    PathRequest:
+      properties:
+        user_id:
+          type: string
+          title: User Id
+        target_concept:
+          type: string
+          title: Target Concept
+        time_budget_minutes:
+          type: integer
+          title: Time Budget Minutes
+      type: object
+      required:
+      - user_id
+      - target_concept
+      - time_budget_minutes
+      title: PathRequest
+    ProgressUpdate:
+      properties:
+        user_id:
+          type: string
+          title: User Id
+        concept_name:
+          type: string
+          title: Concept Name
+      type: object
+      required:
+      - user_id
+      - concept_name
+      title: ProgressUpdate
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

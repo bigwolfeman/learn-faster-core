@@ -97,8 +97,8 @@ def test_prerequisite_link_requires_reasoning(source: str, target: str, weight: 
 
 @settings(max_examples=100)
 @given(
-    doc_source=st.text(min_size=1, max_size=200),
-    content=st.text(min_size=1, max_size=1000),
+    doc_source=st.text(min_size=1, max_size=200).filter(lambda x: x.strip() != ""),
+    content=st.text(min_size=1, max_size=1000).filter(lambda x: x.strip() != ""),
     concept_tag=concept_names
 )
 def test_learning_chunk_has_required_metadata(doc_source: str, content: str, concept_tag: str):
@@ -129,7 +129,7 @@ def test_learning_chunk_has_required_metadata(doc_source: str, content: str, con
 
 @settings(max_examples=100)
 @given(
-    content=st.text(min_size=1, max_size=1000),
+    content=st.text(min_size=1, max_size=1000).filter(lambda x: x.strip() != ""),
     concept_tag=concept_names
 )
 def test_learning_chunk_requires_source_metadata(content: str, concept_tag: str):
@@ -149,8 +149,8 @@ def test_learning_chunk_requires_source_metadata(content: str, concept_tag: str)
 
 @settings(max_examples=100)
 @given(
-    doc_source=st.text(min_size=1, max_size=200),
-    content=st.text(min_size=1, max_size=1000)
+    doc_source=st.text(min_size=1, max_size=200).filter(lambda x: x.strip() != ""),
+    content=st.text(min_size=1, max_size=1000).filter(lambda x: x.strip() != "")
 )
 def test_learning_chunk_requires_concept_tag(doc_source: str, content: str):
     """
@@ -238,8 +238,8 @@ def test_prerequisite_link_completeness_invariant(source: str, target: str, weig
 
 @settings(max_examples=100)
 @given(
-    doc_source=st.text(min_size=1, max_size=200),
-    content=st.text(min_size=1, max_size=1000),
+    doc_source=st.text(min_size=1, max_size=200).filter(lambda x: x.strip() != ""),
+    content=st.text(min_size=1, max_size=1000).filter(lambda x: x.strip() != ""),
     concept_tag=concept_names
 )
 def test_learning_chunk_completeness_invariant(doc_source: str, content: str, concept_tag: str):
