@@ -11,6 +11,7 @@ LearnFast Core Engine combines the structural reasoning of Knowledge Graphs with
 - **Adaptive Navigation**: Unlocks concepts as you progress through the graph.
 - **Time-Constrained Optimization**: Generates the most effective learning path that fits your available time budget.
 - **Automated Ingestion**: Converts documents (PDF, DOCX, HTML) into structured graph nodes and content embeddings.
+- **Lightweight Web UI**: Includes a clean, reactive dashboard for document management and learning path visualization.
 
 ## 🏗 Architecture
 
@@ -85,7 +86,7 @@ Launch Neo4j, PostgreSQL, and ensure Ollama is ready:
 *Services available at:*
 - **Neo4j Browser**: [http://localhost:7475](http://localhost:7475) (user: `neo4j`, pass: `password`)
 - **PostgreSQL**: `localhost:5433` (user: `learnfast`, pass: `password`)
-- **API**: [http://localhost:8000](http://localhost:8000)
+- **Web UI & API**: [http://localhost:8000](http://localhost:8000)
 
 ### 3. Run the Application
 
