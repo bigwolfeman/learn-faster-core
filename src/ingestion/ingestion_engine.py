@@ -75,6 +75,7 @@ Content to analyze:
             ollama_host: Optional Ollama server host URL (default from env or localhost:11434)
         """
         self.model = model or os.getenv("OLLAMA_EXTRACTION_MODEL", self.DEFAULT_MODEL)
+        self.MAX_EXTRACTION_CHARS = int(os.getenv("OLLAMA_CONTEXT_WINDOW_CHARS", "50000"))
         
         # Handle host configuration - use localhost when running outside Docker
         if ollama_host:
@@ -109,13 +110,84 @@ Content to analyze:
         """
         return name.strip().lower()
     
+    MAX_EXTRACTION_CHARS = 50000  # Conservative limit for extraction windows
+    
+    def _create_extraction_windows(self, markdown: str) -> List[str]:
+        """
+        Split markdown into overlapping windows safely respecting paragraph boundaries.
+        
+        Args:
+            markdown: Full markdown text
+            
+        Returns:
+            List of text windows safe for LLM context
+        """
+        if len(markdown) <= self.MAX_EXTRACTION_CHARS:
+            return [markdown]
+            
+        windows = []
+        paragraphs = markdown.split('\n\n')
+        current_window = []
+        current_size = 0
+        
+        for para in paragraphs:
+            para_len = len(para)
+            if current_size + para_len > self.MAX_EXTRACTION_CHARS and current_window:
+                # Window full, save it
+                windows.append('\n\n'.join(current_window))
+                # Start new window with some overlap (keep last paragraph)
+                overlap_para = current_window[-1]
+                current_window = [overlap_para, para]
+                current_size = len(overlap_para) + para_len
+            else:
+                current_window.append(para)
+                current_size += para_len
+                
+        if current_window:
+            windows.append('\n\n'.join(current_window))
+            
+        return windows
+
+    def _merge_schemas(self, schemas: List[GraphSchema]) -> GraphSchema:
+        """
+        Merge multiple partial GraphSchemas into a unified schema.
+        
+        Args:
+            schemas: List of partial extraction results
+            
+        Returns:
+            Unified GraphSchema
+        """
+        if not schemas:
+            return GraphSchema(concepts=[], prerequisites=[])
+            
+        all_concepts = set()
+        prereqs_map = {}  # Key: (source, target), Value: PrerequisiteLink
+        
+        for schema in schemas:
+            # Add concepts
+            for concept in schema.concepts:
+                all_concepts.add(concept)
+                
+            # Add prerequisites, merging duplicates by keeping max weight
+            for prereq in schema.prerequisites:
+                key = (prereq.source_concept, prereq.target_concept)
+                if key in prereqs_map:
+                    # If duplicate, keep the one with higher confidence/weight
+                    if prereq.weight > prereqs_map[key].weight:
+                        prereqs_map[key] = prereq
+                else:
+                    prereqs_map[key] = prereq
+                    
+        return GraphSchema(
+            concepts=sorted(list(all_concepts)),
+            prerequisites=list(prereqs_map.values())
+        )
+
     def extract_graph_structure(self, markdown: str) -> GraphSchema:
         """
         Extract knowledge graph structure from markdown content using LLM.
-        
-        Uses structured extraction with Pydantic schema enforcement to ensure
-        valid JSON output conforming to GraphSchema. Normalizes concept names
-        to lowercase for consistent storage.
+        Supports large documents by chunking content and merging results.
         
         Args:
             markdown: Markdown content to analyze
@@ -129,63 +201,93 @@ Content to analyze:
         """
         if not markdown or not markdown.strip():
             raise ValueError("Cannot extract graph structure from empty content")
+            
+        # Split content into context-safe windows
+        windows = self._create_extraction_windows(markdown)
+        logger.info(f"Split document into {len(windows)} windows for extraction")
         
-        # Prepare the prompt
-        prompt = self.EXTRACTION_PROMPT_TEMPLATE.format(content=markdown)
+        schemas = []
         
-        try:
-            # Call Ollama for structured extraction
-            client = self._get_client()
-            response = client.chat(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                format="json"  # Request JSON format
-            )
+        for i, window_content in enumerate(windows):
+            logger.info(f"Processing extraction window {i+1}/{len(windows)} ({len(window_content)} chars)")
             
-            # Extract the response content
-            response_text = response['message']['content']
+            # Prepare the prompt
+            prompt = self.EXTRACTION_PROMPT_TEMPLATE.format(content=window_content)
             
-            # Parse JSON response
             try:
-                data = json.loads(response_text)
-            except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse LLM response as JSON: {response_text}")
-                raise ValueError(f"LLM returned invalid JSON: {str(e)}") from e
-            
-            # Ensure data is a dictionary
-            if not isinstance(data, dict):
-                logger.error(f"LLM response is not a JSON object: {response_text}")
-                raise ValueError(f"LLM returned invalid JSON: expected object, got {type(data).__name__}")
-            
-            # Normalize concept names to lowercase
-            if 'concepts' in data:
-                data['concepts'] = [self._normalize_concept_name(c) for c in data['concepts']]
-            
-            if 'prerequisites' in data:
-                for prereq in data['prerequisites']:
-                    if 'source_concept' in prereq:
-                        prereq['source_concept'] = self._normalize_concept_name(prereq['source_concept'])
-                    if 'target_concept' in prereq:
-                        prereq['target_concept'] = self._normalize_concept_name(prereq['target_concept'])
-            
-            # Validate with Pydantic schema
-            try:
-                schema = GraphSchema(**data)
-                return schema
-            except ValidationError as e:
-                logger.error(f"Schema validation failed: {e}")
-                raise ValidationError(f"Extracted data doesn't conform to GraphSchema: {str(e)}") from e
+                # Call Ollama for structured extraction
+                client = self._get_client()
+                response = client.chat(
+                    model=self.model,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    format="json"  # Request JSON format
+                )
                 
-        except Exception as e:
-            if isinstance(e, (ValueError, ValidationError)):
-                raise
-            logger.error(f"Graph extraction failed: {str(e)}")
-            raise ValueError(f"Failed to extract graph structure: {str(e)}") from e
+                # Extract the response content
+                response_text = response['message']['content']
+                
+                # Parse JSON response
+                try:
+                    data = json.loads(response_text)
+                except json.JSONDecodeError as e:
+                    logger.error(f"Failed to parse LLM response as JSON in window {i+1}: {response_text}")
+                    # Continue to next window instead of failing everything
+                    continue 
+                
+                # Ensure data is a dictionary
+                if not isinstance(data, dict):
+                    logger.error(f"LLM response is not a JSON object in window {i+1}")
+                    continue
+                
+                # Normalize concept names to lowercase
+                if 'concepts' in data:
+                    data['concepts'] = [self._normalize_concept_name(c) for c in data['concepts']]
+                
+                if 'prerequisites' in data:
+                    for prereq in data['prerequisites']:
+                        if 'source_concept' in prereq:
+                            prereq['source_concept'] = self._normalize_concept_name(prereq['source_concept'])
+                        if 'target_concept' in prereq:
+                            prereq['target_concept'] = self._normalize_concept_name(prereq['target_concept'])
+                
+                # Validate with Pydantic schema
+                try:
+                    # Auto-fix: Ensure all concepts in prerequisites are in concepts list
+                    # This handles the "structural hallucination" we saw earlier
+                    if 'concepts' in data and 'prerequisites' in data:
+                        concept_set = set(data['concepts'])
+                        for p in data['prerequisites']:
+                            if 'source_concept' in p and p['source_concept'] not in concept_set:
+                                data['concepts'].append(p['source_concept'])
+                                concept_set.add(p['source_concept'])
+                            if 'target_concept' in p and p['target_concept'] not in concept_set:
+                                data['concepts'].append(p['target_concept'])
+                                concept_set.add(p['target_concept'])
+
+                    schema = GraphSchema(**data)
+                    schemas.append(schema)
+                except ValidationError as e:
+                    logger.error(f"Schema validation failed in window {i+1}: {e}")
+                    continue
+                    
+            except Exception as e:
+                logger.error(f"Graph extraction failed for window {i+1}: {str(e)}")
+                # Continue processing other windows
+                continue
+        
+        if not schemas:
+            raise ValueError("Failed to extract valid graph structure from any window")
+            
+        # Merge all partial schemas
+        final_schema = self._merge_schemas(schemas)
+        logger.info(f"Merged {len(schemas)} partial schemas into final graph: {len(final_schema.concepts)} concepts")
+        
+        return final_schema
     
     def validate_graph_structure(self, schema: GraphSchema) -> bool:
         """
@@ -327,8 +429,6 @@ Content to analyze:
             chunk_ids = self.store_vector_data(doc_source, chunk_contents, concept_tags)
             
             logger.info(f"Complete document processing finished for '{doc_source}'")
-            return schema, chunk_ids
-            
             return schema, chunk_ids
             
         except Exception as e:

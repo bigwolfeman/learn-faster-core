@@ -84,9 +84,17 @@ class PostgreSQLConnection:
         try:
             with conn.cursor() as cursor:
                 cursor.execute(query, parameters or ())
-                if cursor.description:  # SELECT query
-                    return cursor.fetchall()
-                else:  # INSERT/UPDATE/DELETE query
+                
+                # Check if it's a SELECT query to avoid unnecessary commits
+                is_select = query.strip().upper().startswith("SELECT")
+                
+                if cursor.description:
+                    result = cursor.fetchall()
+                    # If it returns data but isn't a SELECT (e.g., INSERT ... RETURNING), we must commit
+                    if not is_select:
+                        conn.commit()
+                    return result
+                else:
                     conn.commit()
                     return cursor.rowcount
         except Exception as e:

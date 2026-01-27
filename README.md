@@ -17,7 +17,7 @@ LearnFast Core Engine combines the structural reasoning of Knowledge Graphs with
 The system uses a **Hybrid Graph-RAG** architecture:
 
 1.  **Ingestion Layer**: 
-    - LLMs extract concepts and relationships from documents.
+    - LLMs extract concepts and relationships from documents (supports large documents via sliding windows).
     - Content is chunked and embedded for vector search.
 2.  **Storage Layer**:
     - **Neo4j**: Stores the "Map" (Concepts, Relationships, User Progress).
@@ -33,6 +33,14 @@ The system uses a **Hybrid Graph-RAG** architecture:
 - **Docker & Docker Compose**
 - **uv** (Python package manager)
 - **Ollama** (running locally with `gpt-oss:20b-cloud` and `embeddinggemma:latest` models pulled)
+
+## ⚙️ Configuration
+
+The system is configured via the `.env` file. Key settings include:
+
+- `OLLAMA_CONTEXT_WINDOW_CHARS`: Character limit for LLM processing windows (default: `50000`). Adjust this based on your model's context window size to handle large documents.
+- `OLLAMA_EXTRACTION_MODEL`: Model used for knowledge graph extraction.
+- `CHUNK_SIZE_MINUTES`: Target reading time per content chunk.
 
 ## 🏁 Quick Start
 
@@ -111,10 +119,12 @@ Mark concepts as you complete them to unlock new paths.
 ```bash
 # Start a concept
 curl -X POST "http://localhost:8000/progress/start" \
+  -H "Content-Type: application/json" \
   -d '{"user_id": "user_123", "concept_name": "limits"}'
 
 # Complete a concept
 curl -X POST "http://localhost:8000/progress/complete" \
+  -H "Content-Type: application/json" \
   -d '{"user_id": "user_123", "concept_name": "limits"}'
 ```
 

@@ -28,7 +28,7 @@ class VectorStorage:
     def __init__(self, embedding_model: Optional[str] = None, ollama_host: Optional[str] = None, db_connection=None):
         """
         Initialize the vector storage system.
-        
+
         Args:
             embedding_model: Ollama model name for embeddings (default from env or embeddinggemma:latest)
             ollama_host: Optional Ollama server host URL (default from env or localhost:11434)
