@@ -36,11 +36,32 @@ The system uses a **Hybrid Graph-RAG** architecture:
 
 ## ⚙️ Configuration
 
-The system is configured via the `.env` file. Key settings include:
+The system is configured via environment variables, typically managed in a `.env` file.
 
-- `OLLAMA_CONTEXT_WINDOW_CHARS`: Character limit for LLM processing windows (default: `50000`). Adjust this based on your model's context window size to handle large documents.
-- `OLLAMA_EXTRACTION_MODEL`: Model used for knowledge graph extraction.
-- `CHUNK_SIZE_MINUTES`: Target reading time per content chunk.
+### Neo4j (Knowledge Graph)
+- `NEO4J_URI`: Connection URI (default: `bolt://localhost:7688`).
+- `NEO4J_USER`: Username (default: `neo4j`).
+- `NEO4J_PASSWORD`: Password (default: `password`).
+
+### PostgreSQL (Structured Meta & Vectors)
+- `POSTGRES_HOST`: Database host (default: `localhost`).
+- `POSTGRES_PORT`: Database port (default: `5433`).
+- `POSTGRES_DB`: Database name (default: `learnfast`).
+- `POSTGRES_USER`: Database user (default: `learnfast`).
+- `POSTGRES_PASSWORD`: Database password (default: `password`).
+
+### Ollama (LLM Services)
+- `OLLAMA_HOST`: URL of the Ollama server (default: `http://localhost:11434`).
+- `OLLAMA_EXTRACTION_MODEL`: Model used for Knowledge Graph extraction (e.g., `gpt-oss:120b-cloud`).
+- `OLLAMA_EMBEDDING_MODEL`: Model used for generating vector embeddings (e.g., `embeddinggemma:latest`).
+- `OLLAMA_CONTEXT_WINDOW_CHARS`: Maximum character window for document extraction (default: `50000`).
+- `OLLAMA_REWRITE_MODEL`: Model used for pedagogical content rewriting.
+- `OLLAMA_REWRITE_CONTEXT_WINDOW`: Context window specifically for rewriting tasks.
+
+### Core Application Settings
+- `CHUNK_SIZE_MINUTES`: Target reading time per content chunk (used for time-budgeting).
+- `MAX_PATH_PREVIEW_DEPTH`: Default depth for learning path previews.
+- `DEFAULT_EMBEDDING_DIMENSION`: Target dimension for vector indexing (should match your embedding model).
 
 ## 🏁 Quick Start
 
@@ -79,11 +100,19 @@ uv run uvicorn main:app --reload
 You can interact with the system via the REST API.
 
 ### 1. Ingest Content
-Upload a document to build the knowledge graph.
+Upload a document or provide a YouTube URL to build the knowledge graph.
 
+**Upload File:**
 ```bash
 curl -X POST "http://localhost:8000/ingest" \
   -F "file=@/path/to/textbook.pdf"
+```
+
+**Ingest YouTube Video:**
+```bash
+curl -X POST "http://localhost:8000/ingest/youtube" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
 ```
 
 ### 2. Check Available Concepts
