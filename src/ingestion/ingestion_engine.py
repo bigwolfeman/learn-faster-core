@@ -3,7 +3,7 @@
 import json
 import logging
 import os
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Any
 from pydantic import ValidationError
 import ollama
 from dotenv import load_dotenv
@@ -98,17 +98,23 @@ Content to analyze:
             self._client = ollama.Client(host=self.ollama_host)
         return self._client
     
-    def _normalize_concept_name(self, name: str) -> str:
+    def _normalize_concept_name(self, name: Any) -> str:
         """
         Normalize concept names to lowercase for consistent storage.
-        
-        Args:
-            name: Original concept name
-            
-        Returns:
-            Normalized lowercase concept name
+        Handles non-string inputs (like lists or None) gracefully.
         """
-        return name.strip().lower()
+        if name is None:
+            return ""
+            
+        if isinstance(name, list):
+            # If it's a list, recursively join or take first
+            if not name:
+                return ""
+            # Take the first element if it exists and normalize it
+            return self._normalize_concept_name(name[0])
+            
+        # Convert to string and strip/lower
+        return str(name).strip().lower()
     
     MAX_EXTRACTION_CHARS = 50000  # Conservative limit for extraction windows
     

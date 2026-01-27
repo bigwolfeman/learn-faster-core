@@ -24,6 +24,7 @@ from src.path_resolution.path_resolver import PathResolver
 from src.path_resolution.content_retriever import ContentRetriever
 from src.database.init_db import initialize_databases
 from src.models.schemas import LearningPath
+from src.ingestion.youtube_utils import extract_video_id, fetch_transcript
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -121,6 +122,47 @@ async def ingest_document(file: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"Ingestion failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Ingestion failed: {str(e)}")
+
+@app.post("/ingest/youtube", summary="Ingest transcripts from a YouTube video")
+async def ingest_youtube(url: str = Body(..., embed=True)):
+    """
+    Ingest transcripts from a YouTube URL.
+    Fetches transcript, saves as a virtual document, and processes the same way as documents.
+    """
+    if not ingestion_engine or not document_store:
+        raise HTTPException(status_code=503, detail="Services not ready")
+        
+    video_id = extract_video_id(url)
+    if not video_id:
+        raise HTTPException(status_code=400, detail="Invalid YouTube URL")
+        
+    try:
+        # 1. Fetch transcript
+        transcript = fetch_transcript(video_id)
+        if not transcript:
+            raise HTTPException(status_code=404, detail="Transcript not available for this video")
+            
+        # 2. Save transcript as virtual document
+        doc_metadata = document_store.save_transcript(video_id, transcript)
+        
+        logger.info(f"Processing YouTube transcript {doc_metadata.id}: {video_id}")
+        
+        # 3. Process document (extract graph and vectors)
+        ingestion_engine.process_document(doc_metadata.file_path, document_id=doc_metadata.id)
+        
+        # 4. Update status to completed
+        document_store.update_status(doc_metadata.id, "completed")
+        
+        return {
+            "message": f"YouTube video '{video_id}' processed successfully",
+            "document_id": doc_metadata.id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"YouTube ingestion failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"YouTube ingestion failed: {str(e)}")
 
 
 @app.get("/documents", summary="List all ingested documents")

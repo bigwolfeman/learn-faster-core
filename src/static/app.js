@@ -251,9 +251,15 @@ async function renderIngest() {
             <p style="margin-bottom: 2rem; color: var(--text-secondary);">Upload PDF or DOCX files to expand the knowledge graph.</p>
             
             <div class="upload-zone" onclick="document.getElementById('fileInput').click()">
-                <p>Click to upload file</p>
+                <p>Click to upload local file</p>
                 <input type="file" id="fileInput" style="display: none" onchange="handleFileUpload(this)">
             </div>
+            
+            <div style="margin-top: 2rem; display: flex; gap: 0.5rem;">
+                <input type="text" id="youtubeUrl" placeholder="Paste YouTube URL here" style="flex: 1; padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--border-color); background: var(--bg-secondary); color: white;">
+                <button class="btn" onclick="handleYouTubeIngest()">Ingest YouTube</button>
+            </div>
+
             <div id="uploadStatus" style="margin-top: 1rem; text-align: center;"></div>
 
             <div class="document-section" style="margin-top: 4rem;">
@@ -335,6 +341,35 @@ async function handleFileUpload(input) {
         const data = await res.json();
 
         status.innerHTML = `<span style="color: var(--success)">Success! ${data.message}</span>`;
+        loadDocuments(); // Refresh list
+    } catch (err) {
+        status.innerHTML = `<span style="color: var(--warning)">Error: ${err.message}</span>`;
+    }
+}
+
+async function handleYouTubeIngest() {
+    const urlInput = document.getElementById('youtubeUrl');
+    const url = urlInput.value.trim();
+    if (!url) return;
+
+    const status = document.getElementById('uploadStatus');
+    status.innerHTML = '<span style="color: var(--accent-primary)">Fetching transcript and processing... This may take a while.</span>';
+
+    try {
+        const res = await fetch('/ingest/youtube', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+        });
+
+        if (!res.ok) {
+            const data = await res.json();
+            throw new Error(data.detail || res.statusText);
+        }
+
+        const data = await res.json();
+        status.innerHTML = `<span style="color: var(--success)">Success! ${data.message}</span>`;
+        urlInput.value = '';
         loadDocuments(); // Refresh list
     } catch (err) {
         status.innerHTML = `<span style="color: var(--warning)">Error: ${err.message}</span>`;

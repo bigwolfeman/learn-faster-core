@@ -49,7 +49,6 @@ class DocumentStore:
             self.db.execute_query(update_query, (file_path, doc_id))
             
             logger.info(f"Saved document {doc_id}: {file.filename}")
-            
             return DocumentMetadata(
                 id=doc_id,
                 filename=file.filename,
@@ -57,9 +56,59 @@ class DocumentStore:
                 status='pending',
                 file_path=file_path
             )
-            
         except Exception as e:
             logger.error(f"Failed to save document: {e}")
+            raise e
+            
+    def save_transcript(self, video_id: str, transcript: str) -> DocumentMetadata:
+        """Save a fetched YouTube transcript as a virtual document and create metadata."""
+        try:
+            filename = f"youtube_{video_id}.md"
+            
+            # Check for existing record
+            check_query = "SELECT id, upload_date FROM documents WHERE filename = %s"
+            existing = self.db.execute_query(check_query, (filename,))
+            
+            if existing:
+                doc_id = existing[0]['id']
+                upload_date = existing[0]['upload_date']
+                # Reset status to pending
+                self.db.execute_query("UPDATE documents SET status = 'pending' WHERE id = %s", (doc_id,))
+                logger.info(f"Reusing existing record {doc_id} for YouTube video {video_id}")
+            else:
+                insert_query = """
+                    INSERT INTO documents (filename, status)
+                    VALUES (%s, 'pending')
+                    RETURNING id, upload_date
+                """
+                result = self.db.execute_query(insert_query, (filename,))
+                doc_id = result[0]['id']
+                upload_date = result[0]['upload_date']
+            
+            # Save file
+            safe_filename = f"{doc_id}_{filename}"
+            file_path = os.path.join(self.storage_dir, safe_filename)
+            
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(f"# YouTube Video: {video_id}\n\n")
+                f.write(transcript)
+                
+            # Update record with path
+            update_query = "UPDATE documents SET file_path = %s WHERE id = %s"
+            self.db.execute_query(update_query, (file_path, doc_id))
+            
+            logger.info(f"Saved YouTube transcript {doc_id}: {video_id}")
+            
+            return DocumentMetadata(
+                id=doc_id,
+                filename=filename,
+                upload_date=upload_date,
+                status='pending',
+                file_path=file_path
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to save transcript: {e}")
             raise e
 
     def get_document(self, doc_id: int) -> Optional[DocumentMetadata]:
