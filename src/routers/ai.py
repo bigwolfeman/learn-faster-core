@@ -10,10 +10,10 @@ from src.services.llm_service import llm_service
 from src.ingestion.document_processor import DocumentProcessor
 from src.path_resolution.path_resolver import PathResolver
 from src.models.schemas import LearningPath, PathRequest
+from src.dependencies import get_path_resolver
 
 router = APIRouter(prefix="/api/ai", tags=["AI Generation"])
 document_processor = DocumentProcessor()
-path_resolver = PathResolver()
 
 
 @router.get("/test")
@@ -99,7 +99,11 @@ async def generate_questions(request: GenerateRequest, db: Session = Depends(get
 
 
 @router.post("/learning-path")
-async def generate_learning_path(request: PathRequest, db: Session = Depends(get_db)):
+async def generate_learning_path(
+    request: PathRequest, 
+    db: Session = Depends(get_db),
+    path_resolver: PathResolver = Depends(get_path_resolver)
+):
     """
     Generates a structured learning path/curriculum.
     
