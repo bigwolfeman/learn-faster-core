@@ -28,6 +28,14 @@ async def get_unlocked_concepts(
     return navigation_engine.get_unlocked_concepts(user_id)
 
 
+@router.get("/concepts/graph", summary="Get full knowledge graph")
+async def get_concept_graph(
+    navigation_engine: NavigationEngine = Depends(get_navigation_engine)
+):
+    """Get the full concept graph (nodes and edges)."""
+    return navigation_engine.get_full_graph()
+
+
 # --- Content Retrieval Endpoints ---
 
 @router.get("/learning/lesson/{user_id}/{target_concept}", summary="Get formatted lesson content")

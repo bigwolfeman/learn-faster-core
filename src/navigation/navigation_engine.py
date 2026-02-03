@@ -175,3 +175,59 @@ class NavigationEngine:
         except Exception as e:
             logger.error(f"Error getting unlocked concepts for user '{user_id}': {str(e)}")
             return []
+    def get_full_graph(self) -> Dict[str, List[Any]]:
+        """
+        Retrieve the entire concept graph (nodes and edges).
+        
+        Returns:
+            Dictionary with 'nodes' and 'edges' lists.
+        """
+        try:
+            # Query all concepts and relationships
+            # Returning the nodes directly avoids "missing property" warnings in Cypher
+            query = """
+                MATCH (c:Concept)
+                OPTIONAL MATCH (c)-[r:PREREQUISITE]->(t:Concept)
+                RETURN c as node, r, t as target_node
+            """
+            
+            result = self.connection.execute_query(query)
+            
+            nodes = {}
+            edges = []
+            
+            for record in result:
+                node = record["node"]
+                name = node.get("name")
+                
+                if not name:
+                    continue
+                    
+                description = node.get("description", "")
+                
+                if name not in nodes:
+                    nodes[name] = {
+                        "id": name,
+                        "name": name,
+                        "description": description
+                    }
+                
+                # Check for relationships
+                target_node = record["target_node"]
+                if target_node:
+                    target_name = target_node.get("name")
+                    if target_name:
+                        edges.append({
+                            "source_id": name,
+                            "target_id": target_name,
+                            "relation_type": "PREREQUISITE"
+                        })
+                    
+            return {
+                "nodes": list(nodes.values()),
+                "links": edges
+            }
+            
+        except Exception as e:
+            logger.error(f"Error retrieving full graph: {str(e)}")
+            return {"nodes": [], "edges": []}
