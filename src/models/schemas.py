@@ -96,9 +96,11 @@ class DocumentCreate(DocumentBase):
 class DocumentResponse(DocumentBase):
     """Schema for document API responses."""
     id: int  # Adapted to int match learn-fast-core DB
+    filename: str
     file_type: Optional[FileType] = FileType.OTHER
     file_path: str
     upload_date: datetime
+    status: str = "pending"
     extracted_text: Optional[str] = None
     reading_progress: float = 0.0
     folder_id: Optional[str] = None

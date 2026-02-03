@@ -36,10 +36,10 @@ from fastapi import BackgroundTasks
 from src.database.orm import SessionLocal
 
 async def process_document_background(
-    doc_id: int, 
-    file_path: str, 
+    doc_id: int,
+    file_path: str,
     file_type: FileType,
-    document_processor: DocumentProcessor, 
+    document_processor: DocumentProcessor,
     ingestion_engine: IngestionEngine,
     document_store: DocumentStore
 ):
@@ -48,24 +48,25 @@ async def process_document_background(
     db = SessionLocal()
     try:
         print(f"DEBUG: Background processing started for {doc_id}...")
-        
+
         # 1. Extract Text
         extracted_text = ""
         try:
             if file_type == FileType.PDF or os.path.exists(file_path):
                 extracted_text = document_processor.convert_to_markdown(file_path)
                 print(f"DEBUG: Extraction complete for {doc_id}")
-            
+
             # Update DB with extracted text
             document = db.query(Document).filter(Document.id == doc_id).first()
             if document:
                 document.extracted_text = extracted_text
                 document.page_count = 0 # Placeholder
                 db.commit()
-                
+
         except Exception as e:
             print(f"Extraction failed: {e}")
-            # We might want to mark as failed here, but let's try to proceed or just log
+            import traceback
+            traceback.print_exc()
             document = db.query(Document).filter(Document.id == doc_id).first()
             if document:
                 document.status = "failed"
@@ -85,7 +86,7 @@ async def process_document_background(
                     document_id=doc_id
                 )
                 print("DEBUG: IngestionEngine processing complete.")
-                
+
                 # Update status to completed
                 # Re-fetch is good practice in long running tasks
                 document = db.query(Document).filter(Document.id == doc_id).first()
@@ -94,6 +95,12 @@ async def process_document_background(
                     document_store.update_status(doc_id, "completed")
                     db.commit()
                     print(f"DEBUG: Document {doc_id} marked as completed.")
+            else:
+                # No content extracted, mark as failed
+                document = db.query(Document).filter(Document.id == doc_id).first()
+                if document:
+                    document.status = "failed"
+                    db.commit()
         except Exception as e:
             print(f"ERROR: IngestionEngine failed: {e}")
             import traceback
@@ -105,6 +112,16 @@ async def process_document_background(
 
     except Exception as e:
         print(f"Background process critical failure: {e}")
+        import traceback
+        traceback.print_exc()
+        # Attempt to mark document as failed
+        try:
+            document = db.query(Document).filter(Document.id == doc_id).first()
+            if document:
+                document.status = "failed"
+                db.commit()
+        except Exception as cleanup_error:
+            print(f"Failed to update status during cleanup: {cleanup_error}")
     finally:
         db.close()
 
@@ -178,10 +195,17 @@ async def upload_document(
         )
         
         return document
-        
+
     except Exception as e:
         import traceback
         traceback.print_exc()
+        # Cleanup: delete file if it was saved but something went wrong
+        if 'file_path' in locals() and file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                print(f"Cleaned up orphaned file: {file_path}")
+            except Exception as cleanup_error:
+                print(f"Failed to cleanup file {file_path}: {cleanup_error}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
@@ -208,7 +232,7 @@ async def ingest_youtube(
     try:
         # 1. Fetch transcript
         transcript = fetch_transcript(video_id)
-        if not transcript:
+        if not transcript or not transcript.strip():
             raise HTTPException(status_code=404, detail="Transcript not available for this video")
             
         # 2. Save transcript as virtual document

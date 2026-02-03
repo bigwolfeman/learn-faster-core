@@ -201,8 +201,8 @@ async function renderLesson(concept) {
             breaks: false // Disable breaks to let text reflow naturally
         });
 
-        // Convert Markdown to HTML using marked.js
-        const htmlContent = marked.parse(lesson.content_markdown);
+        // Convert Markdown to HTML using marked.js and sanitize with DOMPurify
+        const htmlContent = DOMPurify.sanitize(marked.parse(lesson.content_markdown));
 
         mainContent.innerHTML = `
             <div class="lesson-container">
@@ -314,7 +314,8 @@ async function loadDocuments() {
 
 async function deleteDocument(id) {
     try {
-        await fetch(`/api/documents/${id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/documents/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Delete failed');
         loadDocuments();
     } catch (err) {
         alert('Failed to delete document: ' + err.message);
